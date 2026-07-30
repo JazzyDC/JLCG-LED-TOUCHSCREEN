@@ -1,0 +1,11 @@
+.command-logo {
+  width: 54px;
+  height: 54px;
+  display: block;
+  object-fit: contain;
+  background: transparent !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}

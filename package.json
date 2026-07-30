@@ -1,0 +1,91 @@
+{
+  "name": "touch-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Interactive touchscreen operations command center.",
+  "productName": "JLCG Operations Command Center",
+  "main": ".electron/main.js",
+  "scripts": {
+    "dev": "next dev --webpack",
+    "electron:compile": "tsc -p tsconfig.electron.json",
+    "electron": "npm run electron:compile && concurrently -k -n NEXT,ELECTRON \"npm run dev\" \"wait-on http-get://127.0.0.1:3000 && electron .electron/main.js\"",
+    "electron:prepare": "copyfiles -u 2 \".next/static/**/*\" .next/standalone/.next/static && copyfiles -u 1 \"public/**/*\" .next/standalone/public",
+    "build": "next build && npm run electron:compile && npm run electron:prepare",
+    "start": "next start",
+    "lint": "eslint",
+    "package": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder --win nsis portable",
+    "dist:win": "npm run build && electron-builder --win nsis portable",
+    "dist:linux": "npm run build && electron-builder --linux AppImage deb"
+  },
+  "dependencies": {
+    "next": "16.2.12",
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "concurrently": "^10.0.4",
+    "copyfiles": "^2.4.1",
+    "electron": "^43.2.0",
+    "electron-builder": "^26.15.3",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.12",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "wait-on": "^9.1.0"
+  },
+  "build": {
+    "appId": "com.jlcg.operations-command-center",
+    "productName": "JLCG Operations Command Center",
+    "executableName": "JLCG Operations Command Center",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      ".electron/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": ".next/standalone",
+        "to": "next"
+      },
+      {
+        "from": ".next/standalone/node_modules",
+        "to": "next/node_modules",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "resources/scrcpy",
+        "to": "scrcpy",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Utility"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": false
+    }
+  }
+}
