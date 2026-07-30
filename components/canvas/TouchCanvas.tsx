@@ -21,7 +21,7 @@ type TouchCanvasProps = {
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 const distance = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 const midpoint = (a: Point, b: Point) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
-const MIN_SCALE = .28;
+const MIN_SCALE = .14;
 const MAX_SCALE = .95;
 const ZOOM_STEP = .08;
 
@@ -29,8 +29,16 @@ export function TouchCanvas({ children, screens, singleScreen, displayMode, sele
   const ref = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(.56);
   const [position, setPosition] = useState<Point>({ x: -80, y: -60 });
+  const [minScale, setMinScale] = useState(MIN_SCALE);
   const [menuOpen, setMenuOpen] = useState(false);
   const [draggedScreen, setDraggedScreen] = useState<string | null>(null);
+
+  const computeFitScale = useCallback(() => {
+    const element = ref.current;
+    if (!element) return MIN_SCALE;
+    // .92 leaves a little breathing room around the edges instead of an exact edge-to-edge fit.
+    return Math.min(element.clientWidth / CANVAS_SIZE.width, element.clientHeight / CANVAS_SIZE.height) * .92;
+  }, []);
 
   // Active pointers on the canvas, keyed by pointerId (supports multi-touch).
   const pointers = useRef<Map<number, Point>>(new Map());
@@ -84,11 +92,12 @@ export function TouchCanvas({ children, screens, singleScreen, displayMode, sele
       const next = clamp(window.innerWidth / 3000, .34, .82);
       setScale(next);
       setPosition((current) => bound(current, next));
+      setMinScale(Math.min(MIN_SCALE, computeFitScale() * .65));
     };
     resize();
     addEventListener("resize", resize);
     return () => removeEventListener("resize", resize);
-  }, [bound]);
+  }, [bound, computeFitScale]);
 
   useEffect(() => {
     const enterFullscreen = () => {
@@ -119,16 +128,21 @@ export function TouchCanvas({ children, screens, singleScreen, displayMode, sele
   }, []);
 
   const down = (event: PointerEvent<HTMLDivElement>) => {
-    if (displayMode !== "grid" || (event.target as HTMLElement).closest("[data-widget-interactive]")) return;
-    stopZoomHold();
-    setSmoothZoom(false);
-    event.currentTarget.setPointerCapture(event.pointerId);
+    if (displayMode !== "grid") return;
+    const interactive = !!(event.target as HTMLElement).closest("[data-widget-interactive]");
+    // Always record this touch point, even if it landed on a widget or a button —
+    // otherwise a genuine 2-finger pinch that happens to have one finger over a
+    // widget never gets detected as 2 fingers, and degrades into a 1-finger pan.
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
     if (pointers.current.size === 2) {
-      // Second finger just landed: switch from panning to pinch-zoom.
+      // Second finger just landed anywhere on the canvas: pinch-zoom always wins,
+      // even if one/both fingers started over a widget or a UI button.
+      stopZoomHold();
+      setSmoothZoom(false);
       stopMomentum();
       dragging.current.active = false;
+      pointers.current.forEach((_, id) => { try { event.currentTarget.setPointerCapture(id); } catch { /* no-op */ } });
       const [p1, p2] = Array.from(pointers.current.values());
       const rect = ref.current?.getBoundingClientRect();
       const startMid = midpoint(p1, p2);
@@ -145,8 +159,15 @@ export function TouchCanvas({ children, screens, singleScreen, displayMode, sele
           y: (startMid.y - (rect?.top ?? 0) - startPosition.y) / startScale,
         },
       };
-    } else if (pointers.current.size === 1) {
+      return;
+    }
+
+    if (pointers.current.size === 1) {
+      if (interactive) return; // let the widget-header / button handle its own single-finger behavior
+      stopZoomHold();
+      setSmoothZoom(false);
       stopMomentum();
+      event.currentTarget.setPointerCapture(event.pointerId);
       dragging.current = { active: true, start: { x: event.clientX, y: event.clientY }, origin: currentPosition(), last: { x: event.clientX, y: event.clientY }, time: performance.now(), velocity: { x: 0, y: 0 } };
     }
   };
@@ -160,7 +181,7 @@ export function TouchCanvas({ children, screens, singleScreen, displayMode, sele
       const currentDistance = distance(p1, p2);
       const currentMid = midpoint(p1, p2);
       const ratio = currentDistance / (pinch.current.startDistance || 1);
-      const nextScale = clamp(pinch.current.startScale * ratio, MIN_SCALE, MAX_SCALE);
+      const nextScale = clamp(pinch.current.startScale * ratio, minScale, MAX_SCALE);
       const nextPosition = bound({
         x: (currentMid.x - pinch.current.rectLeft) - pinch.current.contentPoint.x * nextScale,
         y: (currentMid.y - pinch.current.rectTop) - pinch.current.contentPoint.y * nextScale,
@@ -210,7 +231,7 @@ export function TouchCanvas({ children, screens, singleScreen, displayMode, sele
     if (!element) return;
     const scaleNow = scaleRef.current;
     const positionNow = positionRef.current;
-    const nextScale = clamp(Math.round((scaleNow + direction * ZOOM_STEP) * 100) / 100, MIN_SCALE, MAX_SCALE);
+    const nextScale = clamp(Math.round((scaleNow + direction * ZOOM_STEP) * 100) / 100, minScale, MAX_SCALE);
     if (nextScale === scaleNow) return;
     // Keep the point at the center of the viewport stable while zooming.
     const center = { x: element.clientWidth / 2, y: element.clientHeight / 2 };
@@ -271,7 +292,7 @@ export function TouchCanvas({ children, screens, singleScreen, displayMode, sele
     {displayMode === "single" && <div className="command-canvas single-canvas" onDragOver={(event) => event.preventDefault()} onDrop={replaceSingleScreen}>{singleScreen}</div>}
     {displayMode === "grid" && <><header className="command-topbar" data-widget-interactive><img className="command-logo" src="/assets/jlcg-logo.png" alt="JLCG" /></header><aside>Drag anywhere to navigate the wall · pinch with two fingers to zoom</aside>
       <div className="zoom-controls" data-widget-interactive aria-label="Canvas zoom controls">
-        <button onPointerDown={(event) => { event.stopPropagation(); startZoomHold(-1); }} onPointerUp={stopZoomHold} onPointerLeave={stopZoomHold} onPointerCancel={stopZoomHold} disabled={scale <= MIN_SCALE} aria-label="Zoom out" title="Zoom out">−</button>
+        <button onPointerDown={(event) => { event.stopPropagation(); startZoomHold(-1); }} onPointerUp={stopZoomHold} onPointerLeave={stopZoomHold} onPointerCancel={stopZoomHold} disabled={scale <= minScale} aria-label="Zoom out" title="Zoom out">−</button>
         <output aria-label={`Zoom level ${Math.round(scale * 100)} percent`}>{Math.round(scale * 100)}%</output>
         <button onPointerDown={(event) => { event.stopPropagation(); startZoomHold(1); }} onPointerUp={stopZoomHold} onPointerLeave={stopZoomHold} onPointerCancel={stopZoomHold} disabled={scale >= MAX_SCALE} aria-label="Zoom in" title="Zoom in">+</button>
       </div>
@@ -288,4 +309,3 @@ export function TouchCanvas({ children, screens, singleScreen, displayMode, sele
     </nav>
   </main></CanvasContext.Provider>;
 }
-
