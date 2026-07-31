@@ -1,1 +1,27 @@
 :root{--studio-sage:#699477;--studio-orange:#fbae18;--studio-charcoal:#272727;--studio-ink:#171a17;--studio-white:#fff}.command-viewport{background:radial-gradient(circle at 55% 35%,#699477 0,#3e5b47 37%,#171a17 77%)}.command-canvas{background-image:linear-gradient(#fbae1818 1px,transparent 1px),linear-gradient(90deg,#fbae1818 1px,transparent 1px)}.command-topbar>div:last-child,.screen-panel{background:#272727f2;border-color:#fbae186b;color:#fff}.screen-grid-button{background:#272727f2;border-color:#fbae18;color:#fff}.screen-grid-button i{background:#fbae18}.screen-grid-button:hover,.screen-sidebar.is-open .screen-grid-button{background:#3c3c3c;border-color:#ffd174}.screen-panel header small,.view-mode-button,.screen-item.is-selected em{color:#fbae18}.screen-panel>p,.screen-item small{color:#c5d8c9}.screen-item{background:#ffffff0d;color:#fff}.screen-item:hover,.screen-item.is-selected{background:#fbae1820;border-color:#fbae18}.screen-dot,.screen-dot.emerald,.screen-dot.violet,.screen-dot.amber,.screen-dot.rose{background:#fbae18}.view-mode-button{background:#fbae1820;border-color:#fbae18}.view-mode-button:hover{background:#fbae1840}.widget{background:#272727e8;border-color:#fbae184d;box-shadow:0 22px 55px #0009,inset 0 1px #ffffff1c}.widget:hover{border-color:#fbae18}.widget-header{background:linear-gradient(100deg,#fbae171f,transparent);border-bottom-color:#fbae1838}.widget h2{color:#fff}.widget-header p,.camera small,.camera time{color:#c5d8c9}.widget nav button{color:#fff;background:#fbae1822}.widget nav button:hover{background:#fbae1840}.cyan .icon,.emerald .icon,.violet .icon,.amber .icon,.rose .icon{color:#fbae18;background:#fbae181d}.camera{background:linear-gradient(135deg,#699477,#272727 60%,#4d6d56)}.camera:before{background:linear-gradient(125deg,transparent 45%,#fbae1831 45.2%,transparent 45.5%),radial-gradient(ellipse at 68% 60%,#fbae1840,transparent 25%)}.camera>i{border-color:#fdd077;box-shadow:0 0 0 26px #fbae1717,0 0 0 54px #fbae170b}.presentation{background:linear-gradient(140deg,#699477,#272727 67%)}.presentation p,.metrics small{color:#fbae18}.presentation>span,.presentation em small,.metrics span,.chart>span{color:#d1dfd4}.presentation footer i{background:#fbae18}.dash{background:radial-gradient(circle at 70% 20%,#699477 0,transparent 40%),#272727}.metrics article,.chart{background:#6994772b;border-color:#fbae1842}.chart i{background:linear-gradient(#fbae18,#c87b05)}.unavailable{background:linear-gradient(135deg,#699477,#272727)}.unavailable>b{border-color:#fbae18;color:#fbae18}.loading{background:#272727;color:#d1dfd4}.loading i{border-color:#fbae1838;border-top-color:#fbae18}
+.android-mirror-panel {
+  position: fixed;
+  inset: 5% 8%;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: #0a0e15;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, .5);
+}
+.android-mirror-panel > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+}
+.android-device-list { padding: 12px 16px; overflow-y: auto; }
+.android-live-view { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.android-status-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 16px; }
+.android-canvas { flex: 1; width: 100%; height: 100%; object-fit: contain; touch-action: none; background: #000; }
+.android-error { color: #ff6b6b; padding: 0 16px 8px; font-size: .85rem; }
+.screen-dot.green { background: #35d07f; }
+.screen-dot.grey { background: #666; }

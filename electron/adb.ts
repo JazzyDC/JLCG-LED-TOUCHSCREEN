@@ -61,12 +61,18 @@ async function executableExists(candidate: string): Promise<boolean> {
 async function getAdbExecutable(): Promise<string> {
   const executable = process.platform === "win32" ? "adb.exe" : "adb";
   const sdkRoot = process.env.ANDROID_SDK_ROOT ?? process.env.ANDROID_HOME;
+  const sdkRoots = [
+    sdkRoot,
+    // Android Studio's default Windows location. This keeps the packaged app
+    // usable when ANDROID_SDK_ROOT is not inherited from a developer shell.
+    process.platform === "win32" && process.env.LOCALAPPDATA
+      ? path.join(process.env.LOCALAPPDATA, "Android", "Sdk")
+      : undefined,
+  ].filter((root): root is string => Boolean(root));
 
-  if (sdkRoot) {
-    const sdkAdb = path.join(sdkRoot, "platform-tools", executable);
-    if (await executableExists(sdkAdb)) {
-      return sdkAdb;
-    }
+  for (const root of sdkRoots) {
+    const sdkAdb = path.join(root, "platform-tools", executable);
+    if (await executableExists(sdkAdb)) return sdkAdb;
   }
 
   // Electron Builder can supply a bundled platform-tools binary later. Until

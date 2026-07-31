@@ -44,8 +44,20 @@ async function exists(filePath: string): Promise<boolean> {
 async function getAdbExecutable(): Promise<string> {
   const executable = process.platform === "win32" ? "adb.exe" : "adb";
   const sdkRoot = process.env.ANDROID_SDK_ROOT ?? process.env.ANDROID_HOME;
-  const fromSdk = sdkRoot ? path.join(sdkRoot, "platform-tools", executable) : null;
-  return fromSdk && await exists(fromSdk) ? fromSdk : executable;
+  const sdkRoots = [
+    sdkRoot,
+    // Android Studio's default Windows location. Electron launched from the
+    // Start menu does not normally inherit developer-shell environment vars.
+    process.platform === "win32" && process.env.LOCALAPPDATA
+      ? path.join(process.env.LOCALAPPDATA, "Android", "Sdk")
+      : undefined,
+  ].filter((root): root is string => Boolean(root));
+
+  for (const root of sdkRoots) {
+    const fromSdk = path.join(root, "platform-tools", executable);
+    if (await exists(fromSdk)) return fromSdk;
+  }
+  return executable;
 }
 
 function getServerPath(): string {
@@ -100,8 +112,10 @@ async function reservePort(): Promise<number> {
 
 function buildServerArguments(options: ScrcpySessionOptions): string[] {
   const maxSize = Math.min(Math.max(Math.floor(options.maxSize ?? 1920), 320), 4096);
-  const maxFps = Math.min(Math.max(Math.floor(options.maxFps ?? 60), 1), 120);
-  const bitrate = Math.min(Math.max(Math.floor(options.bitrate ?? 12_000_000), 500_000), 200_000_000);
+  // Higher bits per frame makes fast-changing camera and screen content clear
+  // on large mobile displays, while 30 FPS keeps the touchscreen responsive.
+  const maxFps = Math.min(Math.max(Math.floor(options.maxFps ?? 30), 1), 120);
+  const bitrate = Math.min(Math.max(Math.floor(options.bitrate ?? 24_000_000), 500_000), 200_000_000);
 
   return [
     `CLASSPATH=${SCRCPY_DEVICE_PATH}`,

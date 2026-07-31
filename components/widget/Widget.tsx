@@ -19,14 +19,14 @@ function LiveCamera({ w }: { w: WidgetConfig }) {
   return <a href={source.url} target="_blank" rel="noreferrer" title={`Open ${w.title} on SkylineWebcams`} style={{ position: "relative", display: "block", width: "100%", height: "100%", overflow: "hidden", background: "#05080d" }}><img src={`${source.imageUrl}${separator}v=${version}`} alt={`LIVE ${w.title} | SkylineWebcams`} style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }} /></a>;
 }
 
-function Content({ w }: { w: WidgetConfig }) {
+function Content({ w, mobileFullscreen = false, onExitFullscreen }: { w: WidgetConfig; mobileFullscreen?: boolean; onExitFullscreen?: () => void }) {
   const [bad, setBad] = useState(false);
   if (w.type === "presentation" && (w.source?.contentType?.startsWith("image/") || /\.(png|jpe?g|gif|webp|svg)(?:$|[?#])/i.test(w.source?.url ?? ""))) return <img className="frame image-frame" src={w.source?.url} alt={w.title} />;
   if (w.type === "cctv" && w.source?.imageUrl) return <LiveCamera w={w} />;
   if (w.type === "cctv") return <div className="camera"><i /><div><b className="live">LIVE</b><strong>{w.source?.label}</strong><small>Secure feed · 1080p</small></div><time>14:32:08</time></div>;
   if (w.type === "presentation" && w.source?.url) return <iframe className="frame" src={w.source.url} title={w.title} allow="autoplay; fullscreen; picture-in-picture" allowFullScreen />;
   if (w.type === "presentation") return <div className="presentation"><em>02 <small>/ 02</small></em><p>EXTERNAL PRESENTATION</p><h3>{w.title}</h3><span>Add an approved third-party embed URL to display it here.</span><footer><i /><i /><i /></footer></div>;
-  if (w.type === "mobile") return <MobileDeviceWidget />;
+  if (w.type === "mobile") return <MobileDeviceWidget fullscreen={mobileFullscreen} onExitFullscreen={onExitFullscreen} />;
   if (w.type === "dashboard") return <div className="dash"><div className="metrics">{metric.map(([a, b, c]) => <article key={a}><span>{a}</span><b>{b}</b><small>{c}</small></article>)}</div><div className="chart"><span>Activity trend</span><div>{[38, 56, 47, 71, 61, 88, 78].map((n, i) => <i key={i} style={{ height: `${n}%` }} />)}</div></div></div>;
   if (w.type === "youtube") return <iframe className="frame" src={w.source?.url} title={w.title} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen />;
   if (w.type === "video" && !bad) return <video className="frame" controls loop muted playsInline onError={() => setBad(true)}><source src={w.source?.url} type="video/mp4" /></video>;
@@ -57,5 +57,6 @@ export const Widget = memo(function Widget({ widget: w }: { widget: WidgetConfig
   const stopDrag = () => { drag.current = null; setPositioning(false); };
   const head = <div className="widget-header" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={stopDrag} onPointerCancel={stopDrag}><div><b className="icon">{w.icon}</b><section><h2>{w.title}</h2><p>{w.source?.label ?? "Operations service"}</p></section></div><nav><button onClick={refresh}>↻</button><button onClick={() => setFull(!full)}>{full ? "×" : "⛶"}</button></nav></div>;
   const body = loading ? <div className="loading"><i />Refreshing feed…</div> : <Content w={w} />;
-  return <><article className={`widget ${w.accent} ${positioning ? "is-positioning" : ""}`} style={{ left: w.x, top: w.y, width: w.width, height: w.height }} data-widget-interactive>{head}{body}</article>{full && <div className="overlay" data-widget-interactive><article className={`widget fullscreen ${w.accent}`}>{head}{body}</article></div>}</>;
+  const fullscreenBody = loading ? <div className="loading"><i />Refreshing feed…</div> : <Content w={w} mobileFullscreen={w.type === "mobile"} onExitFullscreen={() => setFull(false)} />;
+  return <><article className={`widget ${w.accent} ${positioning ? "is-positioning" : ""}`} style={{ left: w.x, top: w.y, width: w.width, height: w.height }} data-widget-interactive>{head}{body}</article>{full && <div className={`overlay ${w.type === "mobile" ? "mobile-overlay" : ""}`} data-widget-interactive><article className={`widget fullscreen ${w.accent} ${w.type === "mobile" ? "mobile-fullscreen" : ""}`}>{head}{fullscreenBody}</article></div>}</>;
 });

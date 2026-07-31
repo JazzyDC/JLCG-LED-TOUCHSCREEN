@@ -13,7 +13,7 @@ export type MobileDevice = {
 };
 
 export type MobileMetadata = { serial: string; codec: "h264"; width: number; height: number };
-export type MobileFrame = { serial: string; timestamp: number; keyframe: boolean; data: ArrayBuffer | Uint8Array };
+export type MobileFrame = { serial: string; timestamp: number; config: boolean; keyframe: boolean; data: ArrayBuffer | Uint8Array };
 export type MobileStatus = { serial: string; status: MobileDevice["status"]; error?: string };
 
 export type AndroidTouchInput = { action: "down" | "move" | "up"; pointerId: number; x: number; y: number; width: number; height: number; pressure?: number; buttons?: number };

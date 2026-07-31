@@ -8,7 +8,7 @@ export type DesktopDisplay = {
   isPrimary: boolean;
 };
 
-export type MobileFrame = { serial: string; timestamp: number; keyframe: boolean; data: ArrayBuffer };
+export type MobileFrame = { serial: string; timestamp: number; config: boolean; keyframe: boolean; data: ArrayBuffer };
 export type MobileMetadata = { serial: string; codec: "h264"; width: number; height: number };
 export type MobileStatus = { serial: string; status: "disconnected" | "connecting" | "connected" | "reconnecting" | "error"; error?: string };
 

@@ -190,3 +190,5 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 export async function shutdownMobileDevices(): Promise<void> {
   await mobileDevices.shutdown();
 }
+
+

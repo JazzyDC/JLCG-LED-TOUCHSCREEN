@@ -6,6 +6,7 @@ const DEVICE_NAME_BYTES = 64;
 const CODEC_METADATA_BYTES = 12;
 const FRAME_HEADER_BYTES = 12;
 const PTS_VALUE_MASK = BigInt("0x3fffffffffffffff");
+const PTS_CONFIG_FLAG = BigInt("0x8000000000000000");
 const PTS_KEYFRAME_FLAG = BigInt("0x4000000000000000");
 const ZERO_BIG_INT = BigInt(0);
 
@@ -19,6 +20,7 @@ export type AndroidVideoMetadata = {
 export type AndroidVideoFrame = {
   serial: string;
   timestamp: number;
+  config: boolean;
   keyframe: boolean;
   data: ArrayBuffer;
 };
@@ -69,6 +71,50 @@ function waitForConnection(port: number): Promise<Socket> {
   });
 }
 
+/**
+ * An ADB forward accepts a TCP connection before the Android server has opened
+ * its local socket. In that case it closes the connection immediately. Wait for
+ * scrcpy's dummy byte instead of treating the TCP handshake as ready.
+ */
+function waitForVideoConnection(port: number): Promise<{ socket: Socket; initialData: Buffer }> {
+  const deadline = Date.now() + 10_000;
+
+  return new Promise((resolve, reject) => {
+    const attempt = () => {
+      const socket = connect({ host: "127.0.0.1", port });
+      let settled = false;
+
+      const retryOrReject = (error?: Error) => {
+        if (settled) return;
+        settled = true;
+        socket.destroy();
+        if (Date.now() >= deadline) {
+          reject(error ?? new Error("Timed out connecting to the Android streaming service."));
+        } else {
+          setTimeout(attempt, 150);
+        }
+      };
+
+      socket.once("error", retryOrReject);
+      socket.once("close", () => retryOrReject());
+      socket.once("data", (data: Buffer) => {
+        if (settled) return;
+        settled = true;
+        socket.removeListener("error", retryOrReject);
+        socket.removeAllListeners("close");
+        if (data[0] !== 0) {
+          socket.destroy();
+          reject(new Error("Android streaming service did not send its connection handshake."));
+          return;
+        }
+        resolve({ socket, initialData: data.subarray(1) });
+      });
+    };
+
+    attempt();
+  });
+}
+
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(Math.max(Math.round(value), minimum), maximum);
 }
@@ -101,13 +147,17 @@ export class AndroidStream extends EventEmitter {
 
   async start(): Promise<AndroidVideoMetadata> {
     // scrcpy accepts client sockets in this order when audio is disabled.
-    this.videoSocket = await waitForConnection(this.session.port);
-    this.controlSocket = await waitForConnection(this.session.port);
+    const videoConnection = await waitForVideoConnection(this.session.port);
+    this.videoSocket = videoConnection.socket;
+    this.receivedDummyByte = true;
     this.videoSocket.on("data", (chunk: Buffer) => this.readVideo(chunk));
+    this.controlSocket = await waitForConnection(this.session.port);
     this.videoSocket.once("close", () => this.close());
     this.videoSocket.once("error", (error) => this.close(error));
     this.controlSocket.once("close", () => this.close());
     this.controlSocket.once("error", (error) => this.close(error));
+
+    if (videoConnection.initialData.length) this.readVideo(videoConnection.initialData);
 
     return new Promise<AndroidVideoMetadata>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error("Android video metadata was not received.")), 10_000);
@@ -212,6 +262,7 @@ export class AndroidStream extends EventEmitter {
     while (this.buffer.length >= FRAME_HEADER_BYTES) {
       const timestampAndFlags = this.buffer.readBigUInt64BE(0);
       const timestamp = Number(timestampAndFlags & PTS_VALUE_MASK);
+      const config = (timestampAndFlags & PTS_CONFIG_FLAG) !== ZERO_BIG_INT;
       const keyframe = (timestampAndFlags & PTS_KEYFRAME_FLAG) !== ZERO_BIG_INT;
       const size = this.buffer.readUInt32BE(8);
       if (size > 16 * 1024 * 1024) {
@@ -225,6 +276,7 @@ export class AndroidStream extends EventEmitter {
       this.emit("frame", {
         serial: this.session.serial,
         timestamp,
+        config,
         keyframe: keyframe || hasIdrNalUnit(encoded),
         data: copy,
       } satisfies AndroidVideoFrame);

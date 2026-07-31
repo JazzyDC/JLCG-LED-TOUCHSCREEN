@@ -22,10 +22,12 @@ function asBytes(data: MobileFrame["data"]): Uint8Array {
   return data instanceof Uint8Array ? data : new Uint8Array(data);
 }
 
-export function MobileDeviceWidget() {
+export function MobileDeviceWidget({ fullscreen = false, onExitFullscreen }: { fullscreen?: boolean; onExitFullscreen?: () => void }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const decoder = useRef<Decoder | null>(null);
   const metadata = useRef<MobileMetadata | null>(null);
+  const waitingForKeyFrame = useRef(true);
+  const codecConfig = useRef<Uint8Array | null>(null);
   const [devices, setDevices] = useState<MobileDevice[]>([]);
   const [serial, setSerial] = useState("");
   const [wifiAddress, setWifiAddress] = useState("");
@@ -36,6 +38,8 @@ export function MobileDeviceWidget() {
   const closeDecoder = useCallback(() => {
     decoder.current?.close();
     decoder.current = null;
+    waitingForKeyFrame.current = true;
+    codecConfig.current = null;
   }, []);
 
   const configureDecoder = useCallback((next: MobileMetadata) => {
@@ -56,7 +60,13 @@ export function MobileDeviceWidget() {
     const context = target?.getContext("2d", { alpha: false, desynchronized: true });
     decoder.current = new VideoDecoderConstructor({
       output: (frame) => {
-        if (target && context) context.drawImage(frame as CanvasImageSource, 0, 0, target.width, target.height);
+        if (target && context) {
+          if (target.width !== frame.displayWidth || target.height !== frame.displayHeight) {
+            target.width = frame.displayWidth;
+            target.height = frame.displayHeight;
+          }
+          context.drawImage(frame as CanvasImageSource, 0, 0, target.width, target.height);
+        }
         frame.close();
       },
       error: (error) => {
@@ -90,9 +100,33 @@ export function MobileDeviceWidget() {
     const removeFrame = window.electron.onScreenFrame((frame) => {
       if (frame.serial !== serial || !decoder.current) return;
       try {
+        if (frame.config) {
+          codecConfig.current = asBytes(frame.data);
+          // A new SPS/PPS sequence means the encoder restarted (commonly
+          // after rotation or opening the camera). Drop dependent frames until
+          // its next IDR frame so we never display corrupted blocks.
+          waitingForKeyFrame.current = true;
+          return;
+        }
+
+        let data = asBytes(frame.data);
+        // scrcpy sends SPS/PPS as a configuration packet before the first
+        // image. WebCodecs needs both that configuration and a key frame as
+        // its first decode input, so prepend it to the first IDR packet.
+        if (waitingForKeyFrame.current) {
+          if (!frame.keyframe) return;
+          if (codecConfig.current) {
+            const combined = new Uint8Array(codecConfig.current.length + data.length);
+            combined.set(codecConfig.current);
+            combined.set(data, codecConfig.current.length);
+            data = combined;
+          }
+          waitingForKeyFrame.current = false;
+          codecConfig.current = null;
+        }
         const VideoChunk = (globalThis as unknown as { EncodedVideoChunk?: EncodedVideoChunkConstructor }).EncodedVideoChunk;
         if (!VideoChunk) throw new Error("This Electron runtime does not support encoded video chunks.");
-        decoder.current.decode(new VideoChunk({ type: frame.keyframe ? "key" : "delta", timestamp: frame.timestamp, data: asBytes(frame.data) }));
+        decoder.current.decode(new VideoChunk({ type: frame.keyframe ? "key" : "delta", timestamp: frame.timestamp, data }));
       } catch (error) {
         setStatus("error");
         setMessage(error instanceof Error ? error.message : "Unable to decode Android video.");
@@ -185,7 +219,8 @@ export function MobileDeviceWidget() {
     }
   };
 
-  return <div className="mobile-device" data-widget-interactive>
+  return <div className={`mobile-device ${fullscreen ? "is-fullscreen" : ""}`} data-widget-interactive>
+    {fullscreen && <button className="mobile-exit-fullscreen" onClick={onExitFullscreen} aria-label="Exit mobile fullscreen">×</button>}
     <div className="mobile-toolbar">
       <select value={serial} onChange={(event) => setSerial(event.target.value)} aria-label="Android device">
         <option value="">Select USB device</option>

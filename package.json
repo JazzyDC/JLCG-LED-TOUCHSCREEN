@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "next dev --webpack",
     "electron:compile": "tsc -p tsconfig.electron.json",
-    "electron": "npm run electron:compile && concurrently -k -n NEXT,ELECTRON \"npm run dev\" \"wait-on http-get://127.0.0.1:3000 && electron .electron/main.js\"",
+    "electron": "set \"ELECTRON_RUN_AS_NODE=\" && npm run electron:compile && concurrently -k -n NEXT,ELECTRON \"npm run dev\" \"wait-on http-get://127.0.0.1:3000 && electron .electron/main.js\"",
     "electron:prepare": "copyfiles -u 2 \".next/static/**/*\" .next/standalone/.next/static && copyfiles -u 1 \"public/**/*\" .next/standalone/public",
     "build": "next build && npm run electron:compile && npm run electron:prepare",
     "start": "next start",
