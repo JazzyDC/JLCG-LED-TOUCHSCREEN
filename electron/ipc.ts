@@ -175,6 +175,12 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     if (wifiAddress !== undefined && typeof wifiAddress !== "string") throw new TypeError("Invalid Android Wi-Fi address.");
     return mobileDevices.connectDevice(serial, wifiAddress);
   });
+  ipcMain.handle("mobile:pair-wifi", (_event, payload: unknown) => {
+    const request = assertRecord(payload, "Invalid Android Wi-Fi pairing request.");
+    if (typeof request.endpoint !== "string" || typeof request.code !== "string") throw new TypeError("Invalid Android Wi-Fi pairing request.");
+    return mobileDevices.pairWifiDevice(request.endpoint, request.code);
+  });
+  ipcMain.handle("mobile:enable-usb-wifi", (_event, serial: unknown) => mobileDevices.enableUsbWifi(assertSerial(serial)));
   ipcMain.handle("mobile:disconnect", (_event, serial: unknown) => mobileDevices.disconnectDevice(assertSerial(serial)));
   ipcMain.handle("mobile:get-screen-stream", (_event, serial: unknown) => mobileDevices.getScreenStream(assertSerial(serial)));
   ipcMain.handle("mobile:send-touch", (_event, serial: unknown, event: unknown) => mobileDevices.sendTouch(assertSerial(serial), touch(event)));

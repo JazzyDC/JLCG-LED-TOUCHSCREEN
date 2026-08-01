@@ -24,6 +24,8 @@ export type AndroidKeyboardInput = { action: "down" | "up"; keyCode: number; rep
 export type ElectronMobileApi = {
   getDevices(): Promise<MobileDevice[]>;
   connectDevice(serial: string, wifiAddress?: string): Promise<MobileDevice>;
+  pairWifi(endpoint: string, code: string): Promise<string>;
+  enableUsbWifi(serial: string): Promise<string>;
   disconnectDevice(serial: string): Promise<void>;
   getScreenStream(serial: string): Promise<MobileMetadata>;
   sendTouch(serial: string, event: AndroidTouchInput): Promise<void>;

@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { batteryInfo, connectUSB, connectWifi, deviceInfo, disconnect as disconnectAdb, getDevices, type AndroidBatteryInfo, type AndroidDevice, type AndroidDeviceInfo } from "./adb";
+import { batteryInfo, connectUSB, connectWifi, deviceInfo, disconnect as disconnectAdb, enableTcpIp, getDevices, pairWifi, type AndroidBatteryInfo, type AndroidDevice, type AndroidDeviceInfo } from "./adb";
 import { AndroidStream, type AndroidKey, type AndroidScroll, type AndroidTouch, type AndroidVideoFrame, type AndroidVideoMetadata } from "./android-stream";
 import { ScrcpyManager } from "./scrcpy";
 
@@ -62,6 +62,14 @@ export class MobileDeviceService extends EventEmitter {
       this.setStatus(serial, "error", message);
       throw error;
     }
+  }
+
+  async pairWifiDevice(endpoint: string, code: string): Promise<string> {
+    return pairWifi(endpoint, code);
+  }
+
+  async enableUsbWifi(serial: string): Promise<string> {
+    return enableTcpIp(serial, 5555);
   }
 
   async disconnectDevice(serial: string): Promise<void> {

@@ -92,7 +92,15 @@ async function runAdb(args: string[], timeout = ADB_TIMEOUT_MS): Promise<AdbResu
     });
     return { stdout: result.stdout, stderr: result.stderr };
   } catch (error) {
-    const detail = error instanceof Error ? error.message : "Unknown ADB error.";
+    const failure = error as Error & { code?: string; killed?: boolean; signal?: string; stdout?: string; stderr?: string };
+    if (failure.code === "ENOENT") {
+      throw new Error("ADB was not found. Install Android platform-tools or open the app on a PC with Android SDK installed.");
+    }
+    if (failure.killed || failure.signal === "SIGTERM") {
+      throw new Error("ADB timed out. Keep the phone pairing dialog open and make sure this PC is connected to the same phone hotspot or Wi-Fi.");
+    }
+    const output = `${failure.stdout ?? ""}\n${failure.stderr ?? ""}`.trim();
+    const detail = output || (error instanceof Error ? error.message : "Unknown ADB error.");
     throw new Error(`ADB command failed: ${detail}`);
   }
 }
@@ -178,6 +186,36 @@ export async function connectWifi(endpoint: string): Promise<AndroidDevice> {
     throw new Error("Wireless Android device connected but is not ready yet.");
   }
   return device;
+}
+
+/** Pairs an Android 11+ wireless-debugging device using the pairing code dialog. */
+export async function pairWifi(endpoint: string, code: string): Promise<string> {
+  const port = WIFI_ENDPOINT_PATTERN.exec(endpoint)?.[1];
+  const cleanCode = code.trim();
+  if (!port || Number(port) > 65535) {
+    throw new Error("Enter the pairing address from Wireless debugging, for example 192.168.43.1:37123.");
+  }
+  if (!/^\d{6,12}$/.test(cleanCode)) {
+    throw new Error("Enter the Wi-Fi pairing code shown on the Android device.");
+  }
+
+  const { stdout, stderr } = await runAdb(["pair", endpoint, cleanCode], 30_000);
+  const response = `${stdout}\n${stderr}`.trim();
+  if (!/successfully paired|already paired/i.test(response)) {
+    throw new Error(response || "Unable to pair with the Android device.");
+  }
+  return response;
+}
+
+/** Enables classic ADB-over-TCP on an attached USB debugging device. */
+export async function enableTcpIp(serial: string, port = 5555): Promise<string> {
+  assertSerial(serial);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error("Enter a valid TCP/IP port.");
+  }
+  const device = await connectUSB(serial);
+  const { stdout, stderr } = await runAdb(["-s", device.serial, "tcpip", String(port)], 20_000);
+  return `${stdout}\n${stderr}`.trim() || `ADB over Wi-Fi enabled on port ${port}.`;
 }
 
 /** Stops the ADB connection to a wireless device. USB devices remain physically connected. */

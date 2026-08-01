@@ -1,6 +1,6 @@
 // app/layout.tsx
 import type { Metadata } from "next";
-import { Space_Grotesk, Inter, JetBrains_Mono } from "next/font/google";
+import { Poppins, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import "./logo.css";
 import "./display-modes.css";
@@ -8,15 +8,10 @@ import "./studio-palette.css";
 import "./orange-charcoal.css";
 import "./menu-position.css";
 
-const displayFont = Space_Grotesk({
+const poppinsFont = Poppins({
   subsets: ["latin"],
   variable: "--font-display",
-  weight: ["500", "600", "700"],
-});
-
-const bodyFont = Inter({
-  subsets: ["latin"],
-  variable: "--font-body",
+  weight: ["400", "500", "600", "700", "800", "900"],
 });
 
 const monoFont = JetBrains_Mono({
@@ -32,8 +27,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${displayFont.variable} ${bodyFont.variable} ${monoFont.variable}`}>
-      <body className="font-[var(--font-body)] bg-[#0A0E15] text-slate-100 antialiased overscroll-none">
+    <html lang="en" className={`${poppinsFont.variable} ${monoFont.variable}`}>
+      <body className="font-[var(--font-display)] bg-[#0A0E15] text-slate-100 antialiased overscroll-none">
         {children}
       </body>
     </html>
