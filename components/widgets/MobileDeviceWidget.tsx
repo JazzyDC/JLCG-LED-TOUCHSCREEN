@@ -23,7 +23,20 @@ function asBytes(data: MobileFrame["data"]): Uint8Array {
 }
 
 const rememberedMobileSessions = new Map<string, { serial?: string; wifiAddress?: string }>();
-const ownerForSerial = (serial: string, sessionKey: string) => [...rememberedMobileSessions.entries()].find(([key, value]) => key !== sessionKey && value.serial === serial)?.[0] ?? null;
+const MOBILE_SESSION_PRIORITY = ["mobile-app", "operations"];
+const ownerForSerial = (serial: string, sessionKey: string) => {
+  const claimed = new Set([...rememberedMobileSessions.entries()].filter(([, value]) => value.serial === serial).map(([key]) => key));
+  if (typeof window !== "undefined") {
+    for (const key of MOBILE_SESSION_PRIORITY) {
+      try {
+        const saved = JSON.parse(window.localStorage.getItem(`jlcg-mobile-session:${key}`) ?? "null") as { serial?: string } | null;
+        if (saved?.serial === serial) claimed.add(key);
+      } catch { /* Ignore invalid legacy session data. */ }
+    }
+  }
+  const owner = MOBILE_SESSION_PRIORITY.find((key) => claimed.has(key)) ?? [...claimed][0];
+  return owner && owner !== sessionKey ? owner : null;
+};
 
 export function MobileDeviceWidget({ sessionKey = "mobile", fullscreen = false, onExitFullscreen }: { sessionKey?: string; fullscreen?: boolean; onExitFullscreen?: () => void }) {
   const rememberedSession = rememberedMobileSessions.get(sessionKey);
@@ -47,6 +60,8 @@ export function MobileDeviceWidget({ sessionKey = "mobile", fullscreen = false, 
   const [status, setStatus] = useState<MobileDevice["status"]>(rememberedSession?.serial ? "connected" : "disconnected");
   const [message, setMessage] = useState(rememberedSession?.serial ? "Live Android screen connected." : "Choose an authorized Android device.");
   const [streamLatency, setStreamLatency] = useState<number | null>(null);
+  const [hasLiveFrame, setHasLiveFrame] = useState(false);
+  const hasLiveFrameRef = useRef(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [keyboardShift, setKeyboardShift] = useState(false);
   const [keyboardSymbols, setKeyboardSymbols] = useState(false);
@@ -75,7 +90,7 @@ export function MobileDeviceWidget({ sessionKey = "mobile", fullscreen = false, 
     }
   }, [sessionKey, storageKey]);
 
-  const closeDecoder = useCallback(() => {
+  const closeDecoder = useCallback((preserveFrame = false) => {
     decoder.current?.close();
     decoder.current = null;
     waitingForKeyFrame.current = true;
@@ -84,11 +99,15 @@ export function MobileDeviceWidget({ sessionKey = "mobile", fullscreen = false, 
     latencyEstimate.current = null;
     lastLatencyPaint.current = 0;
     setStreamLatency(null);
+    if (!preserveFrame) {
+      hasLiveFrameRef.current = false;
+      setHasLiveFrame(false);
+    }
   }, []);
 
   const configureDecoder = useCallback((next: MobileMetadata) => {
     metadata.current = next;
-    closeDecoder();
+    closeDecoder(true);
     const runtime = globalThis as unknown as { VideoDecoder?: DecoderConstructor; EncodedVideoChunk?: EncodedVideoChunkConstructor };
     const VideoDecoderConstructor = runtime.VideoDecoder;
     if (!VideoDecoderConstructor) {
@@ -98,12 +117,19 @@ export function MobileDeviceWidget({ sessionKey = "mobile", fullscreen = false, 
     }
     const target = canvas.current;
     if (target) {
-      target.width = next.width;
-      target.height = next.height;
+      const portrait = next.width < next.height;
+      const displayWidth = portrait ? next.height : next.width;
+      const displayHeight = portrait ? next.width : next.height;
+      if (target.width !== displayWidth) target.width = displayWidth;
+      if (target.height !== displayHeight) target.height = displayHeight;
     }
     const context = target?.getContext("2d", { alpha: false, desynchronized: true });
     decoder.current = new VideoDecoderConstructor({
       output: (frame) => {
+        if (!hasLiveFrameRef.current) {
+          hasLiveFrameRef.current = true;
+          setHasLiveFrame(true);
+        }
         if (target && context) {
           frameSize.current = { width: frame.displayWidth, height: frame.displayHeight };
           const screen = metadata.current;
@@ -143,13 +169,12 @@ export function MobileDeviceWidget({ sessionKey = "mobile", fullscreen = false, 
     try {
       const next = await window.electron.getDevices();
       setDevices(next);
-      if (!serial && next[0]) setSerial(next[0].serial);
       if (statusRef.current !== "connected") setMessage(next.length ? "Select a device and launch its screen." : "No Android devices found. Enable USB debugging or connect by Wi-Fi.");
     } catch (error) {
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "Unable to list Android devices.");
     }
-  }, [serial]);
+  }, []);
 
   useEffect(() => {
     if (!window.electron || !serial || decoder.current) return;
@@ -253,6 +278,12 @@ export function MobileDeviceWidget({ sessionKey = "mobile", fullscreen = false, 
     const target = wifiAddress.trim() || serial;
     if (!target) {
       setMessage("Select an Android device or enter its Wi-Fi ADB address.");
+      return;
+    }
+    const existingOwner = ownerForSerial(target, sessionKey);
+    if (existingOwner) {
+      setStatus("error");
+      setMessage(`This phone is already assigned to ${existingOwner === "mobile-app" ? "Mobile Device 01" : "Mobile Device 02"}. Select another phone.`);
       return;
     }
     setStatus("connecting");
@@ -385,12 +416,17 @@ export function MobileDeviceWidget({ sessionKey = "mobile", fullscreen = false, 
   };
   const qwertyRows = keyboardSymbols ? [["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"], ["@", "#", "$", "_", "&", "-", "+", "(", ")"], [".", "*", "\"", "'", ":", ";", "!", "?"]] : [["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"], ["a", "s", "d", "f", "g", "h", "j", "k", "l"], ["z", "x", "c", "v", "b", "n", "m"]];
 
-  return <div ref={root} className={`mobile-device ${fullscreen ? "is-fullscreen" : ""}`} data-widget-interactive>
+  return <div ref={root} className={`mobile-device mobile-device-${status} ${hasLiveFrame ? "has-live-frame" : ""} ${fullscreen ? "is-fullscreen" : ""}`} data-widget-interactive>
     {fullscreen && <button className="mobile-exit-fullscreen" onClick={onExitFullscreen} aria-label="Exit mobile fullscreen">x</button>}
+    {fullscreen && hasLiveFrame && <button className="mobile-fullscreen-disconnect" onClick={() => void disconnect()}>Disconnect</button>}
+    <div className="mobile-setup">
     <div className="mobile-toolbar">
       <select value={serial} onChange={(event) => setSerial(event.target.value)} aria-label="Android device">
         <option value="">Select USB device</option>
-        {devices.map((device) => <option key={device.serial} value={device.serial}>{device.info?.name ?? device.model ?? device.serial} - {device.connectionType.toUpperCase()}</option>)}
+        {devices.map((device) => {
+          const owner = ownerForSerial(device.serial, sessionKey);
+          return <option key={device.serial} value={device.serial} disabled={!!owner}>{device.info?.name ?? device.model ?? device.serial} - {owner ? `IN USE BY ${owner === "mobile-app" ? "MOBILE 01" : "MOBILE 02"}` : device.connectionType.toUpperCase()}</option>;
+        })}
       </select>
       <input ref={wifiInput} value={wifiAddress} onFocus={() => { setActiveWifiField("connect"); setKeyboardVisible(true); }} onChange={(event) => setWifiAddress(event.target.value)} placeholder="Wi-Fi ADB: 192.168.43.1:5555" aria-label="Wireless ADB address" />
       <button onClick={() => void loadDevices()} title="Refresh Android devices">Refresh</button>
@@ -409,6 +445,7 @@ export function MobileDeviceWidget({ sessionKey = "mobile", fullscreen = false, 
     </div>
     <div className="mobile-status"><span className={`mobile-status-dot ${status}`} /><strong>{status}</strong><span>{selected?.battery?.level ?? "-"}% {selected?.battery?.charging ? "charging" : ""}</span><span>{selected?.info?.resolution ? `${selected.info.resolution.width} x ${selected.info.resolution.height}` : "-"}</span><span>{selected?.connectionType?.toUpperCase() ?? "-"}</span><span>LAT {streamLatency === null ? "-" : `~${streamLatency}ms`}</span></div>
     <div className={`mobile-alert ${status}`}>{message}</div>
+    </div>
     <div className="mobile-screen-wrap"><canvas ref={canvas} className="mobile-screen" tabIndex={0} onPointerDown={(event) => { setKeyboardVisible(false); event.currentTarget.setPointerCapture(event.pointerId); sendPointer(event, "down"); }} onPointerMove={(event) => sendPointer(event, "move")} onPointerUp={(event) => sendPointer(event, "up")} onPointerCancel={(event) => sendPointer(event, "up")} onWheel={onWheel} onKeyDown={onKeyDown} /></div>
     {keyboardVisible && <div className="wifi-keyboard" onPointerDown={(event) => event.preventDefault()} aria-label="Wi-Fi address keyboard">
       {qwertyRows.map((row, rowIndex) => <div className={`keyboard-row row-${rowIndex + 1}`} key={row.join("")}>

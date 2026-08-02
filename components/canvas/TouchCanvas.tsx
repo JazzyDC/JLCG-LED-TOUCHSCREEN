@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { type DragEvent, type MouseEvent, type PointerEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type CSSProperties, type DragEvent, type MouseEvent, type PointerEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { CANVAS_SIZE } from "@/data/widgets";
 import type { WidgetConfig } from "@/types/widgets";
 import { CanvasContext } from "./CanvasContext";
@@ -22,7 +22,10 @@ const clamp = (value: number, min: number, max: number) => Math.min(Math.max(val
 const distance = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 const midpoint = (a: Point, b: Point) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
 const MIN_SCALE = .14;
-const MAX_SCALE = .95;
+// Keep the authored 4500x2810 layout intact while allowing it to remain crisp
+// and fill high-resolution LED walls. The previous .95 cap left large displays
+// with unnecessary empty space.
+const MAX_SCALE = 6;
 const ZOOM_STEP = .08;
 
 export function TouchCanvas({ children, screens, singleScreen, displayMode, selectedScreenId, onDisplayModeChange, onSelectScreen, onMoveScreen, onOpenSourceEditor }: TouchCanvasProps) {
@@ -81,7 +84,7 @@ export function TouchCanvas({ children, screens, singleScreen, displayMode, sele
   const smoothZoomTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const holdInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const bound = useCallback((point: Point, nextScale = scale) => {
+  const bound = useCallback((point: Point, nextScale = scaleRef.current) => {
     const element = ref.current;
     if (!element) return point;
     const contentWidth = CANVAS_SIZE.width * nextScale;
@@ -90,7 +93,7 @@ export function TouchCanvas({ children, screens, singleScreen, displayMode, sele
       x: contentWidth <= element.clientWidth ? (element.clientWidth - contentWidth) / 2 : clamp(point.x, element.clientWidth - contentWidth, 0),
       y: contentHeight <= element.clientHeight ? (element.clientHeight - contentHeight) / 2 : clamp(point.y, element.clientHeight - contentHeight, 0),
     };
-  }, [scale]);
+  }, []);
 
   useEffect(() => {
     const resize = () => {
@@ -101,8 +104,13 @@ export function TouchCanvas({ children, screens, singleScreen, displayMode, sele
       setMinScale(Math.min(MIN_SCALE, fit * .85));
     };
     resize();
+    const observer = new ResizeObserver(resize);
+    if (ref.current) observer.observe(ref.current);
     addEventListener("resize", resize);
-    return () => removeEventListener("resize", resize);
+    return () => {
+      observer.disconnect();
+      removeEventListener("resize", resize);
+    };
   }, [bound, computeFitScale]);
 
   useEffect(() => {
@@ -303,8 +311,35 @@ export function TouchCanvas({ children, screens, singleScreen, displayMode, sele
     setMenuOpen(false);
   };
 
+  const viewportWidth = ref.current?.clientWidth ?? CANVAS_SIZE.width * scale;
+  const viewportHeight = ref.current?.clientHeight ?? CANVAS_SIZE.height * scale;
+  const viewportMin = Math.min(viewportWidth, viewportHeight);
+  const fullscreenGutter = clamp(viewportMin * .015, 12, 28);
+  const fullscreenLeftRail = clamp(viewportWidth * .1, 82, 193);
+
   return <CanvasContext.Provider value={{ displayMode, scale, moveScreen: onMoveScreen }}><main ref={ref} className="command-viewport" onContextMenu={(event) => event.preventDefault()} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
-    {displayMode === "grid" && <div className="command-canvas" onDragOver={(event) => event.preventDefault()} onDrop={dropScreen} style={{ width: CANVAS_SIZE.width, height: CANVAS_SIZE.height, transform: `translate3d(${position.x}px,${position.y}px,0) scale(${scale})`, transition: smoothZoom ? "transform .26s cubic-bezier(.4,0,.2,1)" : "none" }}>{children}</div>}
+    {displayMode === "grid" && <div className="demo-branding" aria-label="QC DRRMO and JLCG">
+      <div className="demo-brand-logo-group">
+        <img className="demo-brand-logo demo-brand-logo-qcdrrmo" src="/assets/qcdrrmo-palaro-logo.png" alt="QC DRRMO" />
+        <img className="demo-brand-logo" src="/assets/jlcg-logo.png" alt="JLCG" />
+      </div>
+      <p>JLCG Touchscreen LED Demo for QC DRRMO</p>
+    </div>}
+    {displayMode === "grid" && <div className="command-canvas" onDragOver={(event) => event.preventDefault()} onDrop={dropScreen} style={{
+      width: CANVAS_SIZE.width,
+      height: CANVAS_SIZE.height,
+      transform: `translate3d(${position.x}px,${position.y}px,0) scale(${scale})`,
+      transition: smoothZoom ? "transform .26s cubic-bezier(.4,0,.2,1)" : "none",
+      "--mobile-fullscreen-left": `${(fullscreenLeftRail - position.x) / scale}px`,
+      "--mobile-fullscreen-top": `${(fullscreenGutter - position.y) / scale}px`,
+      "--mobile-fullscreen-width": `${(viewportWidth - fullscreenLeftRail - fullscreenGutter) / scale}px`,
+      "--mobile-fullscreen-height": `${(viewportHeight - fullscreenGutter * 2) / scale}px`,
+      "--mobile-fullscreen-control": `${40 / scale}px`,
+      "--mobile-fullscreen-control-offset": `${12 / scale}px`,
+      "--mobile-fullscreen-border": `${1 / scale}px`,
+      "--mobile-canvas-scale": scale,
+      "--mobile-inverse-scale": 1 / scale,
+    } as CSSProperties}>{children}</div>}
     {displayMode === "single" && <div className="command-canvas single-canvas" onDragOver={(event) => event.preventDefault()} onDrop={replaceSingleScreen}>{singleScreen}</div>}
     {displayMode === "grid" && <><aside>Drag anywhere to navigate the wall - pinch with two fingers to zoom</aside></>}
     <nav className={`screen-sidebar ${displayMode === "single" ? "single-mode" : ""} ${menuOpen ? "is-open" : ""}`} data-widget-interactive aria-label="Screen menu">
@@ -313,7 +348,7 @@ export function TouchCanvas({ children, screens, singleScreen, displayMode, sele
         <header><div><small>SCREEN CONTROL</small><strong>{displayMode === "grid" ? "Grid view" : "Full-screen view"}</strong></div><button onClick={() => setMenuOpen(false)} aria-label="Close screen menu">x</button></header>
         <button className="view-mode-button" onClick={() => onDisplayModeChange(displayMode === "grid" ? "single" : "grid")}>{displayMode === "grid" ? "Exit Grid View" : "Open Grid View"}</button>
         <button className="source-menu-button" onClick={() => onOpenSourceEditor(displayMode === "single" ? selectedScreenId : screens[0].id)}>Set widget source</button>
-        <p>{displayMode === "grid" ? "All 8 screens are aligned. Drag a screen to reposition it." : "Tap a screen, or drag it onto the viewer, to replace only the current screen."}</p>
+        <p>{displayMode === "grid" ? `All ${screens.length} screens are aligned. Drag a screen to reposition it.` : "Tap a screen, or drag it onto the viewer, to replace only the current screen."}</p>
         <div className="screen-list">{screens.map((screen, index) => <button key={screen.id} className={`screen-item ${draggedScreen === screen.id ? "is-dragging" : ""} ${displayMode === "single" && selectedScreenId === screen.id ? "is-selected" : ""}`} draggable onDragStart={(event) => dragStart(event, screen.id)} onDragEnd={() => setDraggedScreen(null)} onClick={() => displayMode === "grid" ? focusScreen(screen) : onSelectScreen(screen.id)}><b>{String(index + 1).padStart(2, "0")}</b><span className={`screen-dot ${screen.accent}`} /><span><strong>{screen.title}</strong><small>{screen.source?.label ?? "Operations service"}</small></span>{displayMode === "grid" && <em aria-hidden="true">::</em>}</button>)}</div>
       </section>
     </nav>

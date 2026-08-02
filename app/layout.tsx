@@ -7,6 +7,7 @@ import "./display-modes.css";
 import "./studio-palette.css";
 import "./orange-charcoal.css";
 import "./menu-position.css";
+import "./responsive.css";
 
 const poppinsFont = Poppins({
   subsets: ["latin"],

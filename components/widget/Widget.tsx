@@ -36,6 +36,8 @@ const embedUrl = (raw = "") => {
       embed.searchParams.set("disablekb", "1");
       embed.searchParams.set("iv_load_policy", "3");
       embed.searchParams.set("modestbranding", "1");
+      embed.searchParams.set("loop", "1");
+      embed.searchParams.set("playlist", youtubeId);
       const start = url.searchParams.get("start") ?? url.searchParams.get("t");
       if (start) embed.searchParams.set("start", start.replace(/\D+$/g, ""));
       return embed.toString();
@@ -178,6 +180,15 @@ function Content({ w, mobileFullscreen = false, onExitFullscreen }: { w: WidgetC
   return <div className="unavailable"><b>PLAY</b><strong>Internal video ready</strong><small>Add your MP4 file to public/videos.</small></div>;
 }
 
+function CameraFullscreenGrid({ w }: { w: WidgetConfig }) {
+  const feeds = [w.source?.url, w.source?.secondaryUrl].filter((url): url is string => !!url);
+  const cameraNumber = w.id === "camera-lobby" ? "2" : "1";
+  return <div className="camera-fullscreen-grid">{feeds.map((url, index) => <section key={url}>
+    <span>{`Camera ${cameraNumber}${index === 0 ? "A" : "B"}`}</span>
+    <iframe src={embedUrl(url)} title={`${w.title} feed ${index + 1}`} allow="autoplay; encrypted-media; fullscreen; picture-in-picture" tabIndex={-1} aria-hidden="true" />
+  </section>)}</div>;
+}
+
 export const Widget = memo(function Widget({ widget: w }: { widget: WidgetConfig }) {
   const [full, setFull] = useState(false);
   const [positioning, setPositioning] = useState(false);
@@ -201,9 +212,11 @@ export const Widget = memo(function Widget({ widget: w }: { widget: WidgetConfig
     moveScreen(w.id, left, top);
   };
   const stopDrag = () => { drag.current = null; setPositioning(false); };
-  const head = <div className="widget-header" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={stopDrag} onPointerCancel={stopDrag}><div><b className="icon">{w.icon}</b><section><h2>{w.title}</h2><p>{w.source?.label ?? "Operations service"}</p></section></div><nav><button className="fullscreen-toggle" onClick={() => setFull(!full)} aria-label={full ? "Close full-screen view" : "Open full-screen view"} title={full ? "Close full-screen view" : "Open full-screen view"}>{full ? "x" : ""}</button></nav></div>;
-  const body = <Content w={w} />;
-  const fullscreenBody = <Content w={w} />;
-  const overlay = full && typeof document !== "undefined" ? createPortal(<div className="overlay widget-fullscreen-overlay" data-widget-interactive><button className="fullscreen-close" onClick={() => setFull(false)} aria-label="Close full-screen view">x</button><div className={`fullscreen-content ${w.accent}`}>{fullscreenBody}</div></div>, document.body) : null;
-  return <><article className={`widget ${w.accent} ${positioning ? "is-positioning" : ""}`} style={{ left: w.x, top: w.y, width: w.width, height: w.height }} data-widget-interactive>{head}{body}</article>{overlay}</>;
+  const head = <div className="widget-header" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={stopDrag} onPointerCancel={stopDrag}><div><b className="icon">{w.icon}</b><section><h2>{w.title}</h2><p>{w.source?.label ?? "Operations service"}</p></section></div></div>;
+  // Keep the same mobile component mounted when entering full-screen. Creating
+  // a second instance forces a fresh decoder to wait for the next H.264 keyframe.
+  const body = w.source?.secondaryUrl ? <CameraFullscreenGrid w={w} /> : <Content w={w} mobileFullscreen={w.type === "mobile" && full} onExitFullscreen={() => setFull(false)} />;
+  const fullscreenBody = w.source?.secondaryUrl ? <CameraFullscreenGrid w={w} /> : <Content w={w} />;
+  const overlay = full && w.type !== "mobile" && typeof document !== "undefined" ? createPortal(<div className="overlay widget-fullscreen-overlay" data-widget-interactive><button className="fullscreen-close" onClick={() => setFull(false)} aria-label="Close full-screen view">x</button><div className={`fullscreen-content ${w.accent}`}>{fullscreenBody}</div></div>, document.body) : null;
+  return <><article className={`widget ${w.accent} ${positioning ? "is-positioning" : ""} ${w.type === "mobile" && full ? "mobile-widget-fullscreen" : ""}`} style={{ left: w.x, top: w.y, width: w.width, height: w.height }} data-widget-interactive>{head}{body}{displayMode === "grid" && !full && <div className="widget-center-fullscreen" role="button" tabIndex={0} aria-label={`Open ${w.title} full-screen`} onClick={() => setFull(true)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setFull(true); } }} />}</article>{overlay}</>;
 });

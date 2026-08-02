@@ -12,28 +12,15 @@ const LEGACY_SOURCES = new Set([
 const DEMO_CCTV_SOURCES: Record<string, WidgetConfig["source"]> = {
   "camera-north": {
     label: "YouTube video feed",
-    url: "https://www.youtube.com/watch?v=BWtr3Od7lTk",
+    url: "https://www.youtube.com/watch?v=oUTKwSBvBhI",
+    secondaryUrl: "https://www.youtube.com/watch?v=xjhneAqERqU",
   },
   "camera-lobby": {
     label: "YouTube video feed",
-    url: "https://www.youtube.com/watch?v=xjhneAqERqU",
+    url: "https://www.youtube.com/watch?v=VR-x3HdhKLQ",
+    secondaryUrl: "https://www.youtube.com/watch?v=UemFRPrl1hk",
   },
 };
-const DEMO_CCTV_TITLES: Record<string, string> = {
-  "camera-north": "Demo CCTV Feed - Camera 01",
-  "camera-lobby": "Security Monitor Room - Camera 02",
-};
-const SKYLINE_SOURCES = new Set([
-  "https://www.skylinewebcams.com/en/webcam/espana/canarias/santa-cruz-de-tenerife/playa-del-duque.html",
-  "https://www.skylinewebcams.com/en/webcam/philippines/davao/davao-del-sur/davao-city.html",
-]);
-const OLD_CAMERA_01_SOURCES = new Set([
-  "https://assets.mixkit.co/videos/31372/31372-720.mp4",
-  "https://www.youtube.com/watch?v=oUTKwSBvBhI",
-]);
-const OLD_CAMERA_02_SOURCES = new Set([
-  "https://assets.mixkit.co/videos/22997/22997-720.mp4",
-]);
 const DEFAULT_FIXED_SOURCES: Record<string, Pick<WidgetConfig, "type" | "source">> = {
   briefing: {
     type: "presentation",
@@ -41,7 +28,7 @@ const DEFAULT_FIXED_SOURCES: Record<string, Pick<WidgetConfig, "type" | "source"
   },
   "internal-video": {
     type: "video",
-    source: { url: "/videos/jet-legaspi-annecy-loop.mp4", label: "Jet Legaspi Annecy loop", contentType: "video/mp4" },
+    source: { url: "/assets/DEMO%20JLCG%20VIDEO.mp4", label: "DEMO JLCG VIDEO", contentType: "video/mp4" },
   },
   "city-feed": {
     type: "youtube",
@@ -49,7 +36,11 @@ const DEFAULT_FIXED_SOURCES: Record<string, Pick<WidgetConfig, "type" | "source"
   },
   planning: {
     type: "presentation",
-    source: { url: "https://canva.link/pvfuqc2u2ak3f4j", label: "Canva presentation" },
+    source: { url: "/pdf/QCDRRMO%20PALARO.pdf", label: "QCDRRMO PALARO", contentType: "application/pdf" },
+  },
+  training: {
+    type: "presentation",
+    source: { url: "/pdf/QCDRRMO%20TRAINING.pdf", label: "QCDRRMO TRAINING", contentType: "application/pdf" },
   },
 };
 const DEFAULT_WIDGET_LAYOUT = new Map(widgets.map(({ id, title, type, icon, x, y, width, height, accent, source }) => [id, { title, type, icon, x, y, width, height, accent, source }]));
@@ -65,9 +56,10 @@ const needsDefaultSource = (screen: WidgetConfig) => {
   const url = screen.source?.url ?? "";
   if (OLD_DEFAULT_SOURCE_URLS.has(url) || url.startsWith("blob:")) return true;
   if (screen.id === "briefing") return url.includes("/pdf/jlcg-profile-deck-032026.pdf") ? screen.source?.pages !== 16 : !url.includes("canva.com") && !url.includes("canva.link");
-  if (screen.id === "internal-video") return !/\.(mp4|webm|mov|m4v)(?:$|[?#])/i.test(url) && !screen.source?.contentType?.startsWith("video/");
+  if (screen.id === "internal-video") return !url.includes("/assets/DEMO%20JLCG%20VIDEO.mp4");
   if (screen.id === "city-feed") return getYoutubeId(new URL(withProtocol(url))) === "21X5lGlDOfg" || !getYoutubeId(new URL(withProtocol(url)));
-  if (screen.id === "planning") return !url.includes("canva.com") && !url.includes("canva.link");
+  if (screen.id === "planning") return !url.includes("/pdf/QCDRRMO%20PALARO.pdf");
+  if (screen.id === "training") return !url.includes("/pdf/QCDRRMO%20TRAINING.pdf");
   return false;
 };
 const applyBundledDefaultSource = (screen: WidgetConfig) => {
@@ -162,7 +154,7 @@ const sourceLabel = (url: string) => {
 
 export default function Home() {
   const [screens, setScreens] = useState<WidgetConfig[]>(widgets);
-  const [displayMode, setDisplayMode] = useState<"single" | "grid">("single");
+  const [displayMode, setDisplayMode] = useState<"single" | "grid">("grid");
   const [selectedScreenId, setSelectedScreenId] = useState(widgets[0].id);
   const [sourceEditorOpen, setSourceEditorOpen] = useState(false);
   const [sourceScreenId, setSourceScreenId] = useState(widgets[0].id);
@@ -179,10 +171,8 @@ export default function Home() {
       const stored = JSON.parse(saved) as WidgetConfig[];
       const cleaned = widgets.map((defaultScreen) => {
         const screen = stored.find((item) => item.id === defaultScreen.id) ?? defaultScreen;
+        if (DEMO_CCTV_SOURCES[screen.id]) return applyDefaultWidgetLayout({ ...screen, type: "youtube", source: DEMO_CCTV_SOURCES[screen.id] });
         if (LEGACY_SOURCES.has(screen.source?.url ?? "")) return { ...screen, source: { label: "Presentation source not set" } };
-        if (screen.id === "camera-north" && OLD_CAMERA_01_SOURCES.has(screen.source?.url ?? "")) return applyDefaultWidgetLayout({ ...screen, source: DEMO_CCTV_SOURCES[screen.id] });
-        if (screen.id === "camera-lobby" && OLD_CAMERA_02_SOURCES.has(screen.source?.url ?? "")) return applyDefaultWidgetLayout({ ...screen, source: DEMO_CCTV_SOURCES[screen.id] });
-        if (screen.type === "cctv" && SKYLINE_SOURCES.has(screen.source?.url ?? "") && DEMO_CCTV_SOURCES[screen.id]) return applyDefaultWidgetLayout({ ...screen, title: DEMO_CCTV_TITLES[screen.id] ?? screen.title, source: DEMO_CCTV_SOURCES[screen.id] });
         return applyBundledDefaultSource(applyDefaultWidgetLayout(screen));
       });
       setScreens(cleaned);
@@ -262,13 +252,7 @@ export default function Home() {
   const selectedScreen = screens.find((screen) => screen.id === selectedScreenId) ?? screens[0];
   const changeDisplayMode = (mode: "single" | "grid") => {
     if (mode === "grid") {
-      setScreens((current) => current.map((screen, index) => ({
-        ...screen,
-        x: 160 + (index % 3) * 1380,
-        y: 150 + Math.floor(index / 3) * 780,
-        width: 1240,
-        height: 660,
-      })));
+      setScreens((current) => current.map((screen) => applyDefaultWidgetLayout(screen)));
     }
     setDisplayMode(mode);
   };
@@ -286,8 +270,15 @@ export default function Home() {
     {screens.map((widget: WidgetConfig) => <Widget key={widget.id} widget={widget} />)}
   </TouchCanvas>}
   {introVisible && <section className={`opening-screen is-${introStage}`} aria-label="Welcome screen">
+    <div className="demo-branding" aria-label="QC DRRMO and JLCG">
+      <div className="demo-brand-logo-group">
+        <img className="demo-brand-logo demo-brand-logo-qcdrrmo" src="/assets/qcdrrmo-palaro-logo.png" alt="QC DRRMO" />
+        <img className="demo-brand-logo" src="/assets/jlcg-logo.png" alt="JLCG" />
+      </div>
+    </div>
     {introStage === "start" ? <button className="tap-start" type="button" onClick={startApp}>TAP TO START</button> : <div className="opening-welcome" aria-live="polite">
       <h1>Welcome</h1>
+      <p className="opening-subtitle">JLCG Touchscreen LED Demo for QC DRRMO</p>
       
     </div>}
   </section>}
