@@ -11,14 +11,12 @@ const LEGACY_SOURCES = new Set([
 ]);
 const DEMO_CCTV_SOURCES: Record<string, WidgetConfig["source"]> = {
   "camera-north": {
-    label: "Online CCTV demo",
-    url: "https://assets.mixkit.co/videos/31372/31372-720.mp4",
-    contentType: "video/mp4",
+    label: "YouTube video feed",
+    url: "https://www.youtube.com/watch?v=BWtr3Od7lTk",
   },
   "camera-lobby": {
-    label: "Online CCTV demo",
-    url: "https://assets.mixkit.co/videos/22997/22997-720.mp4",
-    contentType: "video/mp4",
+    label: "YouTube video feed",
+    url: "https://www.youtube.com/watch?v=xjhneAqERqU",
   },
 };
 const DEMO_CCTV_TITLES: Record<string, string> = {
@@ -28,6 +26,13 @@ const DEMO_CCTV_TITLES: Record<string, string> = {
 const SKYLINE_SOURCES = new Set([
   "https://www.skylinewebcams.com/en/webcam/espana/canarias/santa-cruz-de-tenerife/playa-del-duque.html",
   "https://www.skylinewebcams.com/en/webcam/philippines/davao/davao-del-sur/davao-city.html",
+]);
+const OLD_CAMERA_01_SOURCES = new Set([
+  "https://assets.mixkit.co/videos/31372/31372-720.mp4",
+  "https://www.youtube.com/watch?v=oUTKwSBvBhI",
+]);
+const OLD_CAMERA_02_SOURCES = new Set([
+  "https://assets.mixkit.co/videos/22997/22997-720.mp4",
 ]);
 const DEFAULT_FIXED_SOURCES: Record<string, Pick<WidgetConfig, "type" | "source">> = {
   briefing: {
@@ -43,8 +48,8 @@ const DEFAULT_FIXED_SOURCES: Record<string, Pick<WidgetConfig, "type" | "source"
     source: { url: "https://www.youtube.com/watch?v=FMPq7aG-CrM&t=2s", label: "YouTube broadcast" },
   },
   planning: {
-    type: "youtube",
-    source: { url: "https://www.youtube.com/watch?v=FMPq7aG-CrM&t=2s", label: "Third-party YouTube" },
+    type: "presentation",
+    source: { url: "https://canva.link/pvfuqc2u2ak3f4j", label: "Canva presentation" },
   },
 };
 const DEFAULT_WIDGET_LAYOUT = new Map(widgets.map(({ id, title, type, icon, x, y, width, height, accent, source }) => [id, { title, type, icon, x, y, width, height, accent, source }]));
@@ -62,7 +67,7 @@ const needsDefaultSource = (screen: WidgetConfig) => {
   if (screen.id === "briefing") return url.includes("/pdf/jlcg-profile-deck-032026.pdf") ? screen.source?.pages !== 16 : !url.includes("canva.com") && !url.includes("canva.link");
   if (screen.id === "internal-video") return !/\.(mp4|webm|mov|m4v)(?:$|[?#])/i.test(url) && !screen.source?.contentType?.startsWith("video/");
   if (screen.id === "city-feed") return getYoutubeId(new URL(withProtocol(url))) === "21X5lGlDOfg" || !getYoutubeId(new URL(withProtocol(url)));
-  if (screen.id === "planning") return false;
+  if (screen.id === "planning") return !url.includes("canva.com") && !url.includes("canva.link");
   return false;
 };
 const applyBundledDefaultSource = (screen: WidgetConfig) => {
@@ -175,6 +180,8 @@ export default function Home() {
       const cleaned = widgets.map((defaultScreen) => {
         const screen = stored.find((item) => item.id === defaultScreen.id) ?? defaultScreen;
         if (LEGACY_SOURCES.has(screen.source?.url ?? "")) return { ...screen, source: { label: "Presentation source not set" } };
+        if (screen.id === "camera-north" && OLD_CAMERA_01_SOURCES.has(screen.source?.url ?? "")) return applyDefaultWidgetLayout({ ...screen, source: DEMO_CCTV_SOURCES[screen.id] });
+        if (screen.id === "camera-lobby" && OLD_CAMERA_02_SOURCES.has(screen.source?.url ?? "")) return applyDefaultWidgetLayout({ ...screen, source: DEMO_CCTV_SOURCES[screen.id] });
         if (screen.type === "cctv" && SKYLINE_SOURCES.has(screen.source?.url ?? "") && DEMO_CCTV_SOURCES[screen.id]) return applyDefaultWidgetLayout({ ...screen, title: DEMO_CCTV_TITLES[screen.id] ?? screen.title, source: DEMO_CCTV_SOURCES[screen.id] });
         return applyBundledDefaultSource(applyDefaultWidgetLayout(screen));
       });
@@ -281,7 +288,7 @@ export default function Home() {
   {introVisible && <section className={`opening-screen is-${introStage}`} aria-label="Welcome screen">
     {introStage === "start" ? <button className="tap-start" type="button" onClick={startApp}>TAP TO START</button> : <div className="opening-welcome" aria-live="polite">
       <h1>Welcome</h1>
-      <img className="opening-logo" src="/assets/qcdrrmo-logo-clean.png" alt="QCDRRMO" />
+      
     </div>}
   </section>}
   {sourceEditorOpen && <div className="source-editor-overlay" role="dialog" aria-modal="true" aria-labelledby="source-editor-title">
